@@ -63,11 +63,11 @@ pygame.time.set_timer(ADDRUNNER, SPAWN_TIME_RUNNER)
 
 running = True
 
-
 max_id = 0
 
+
 class Blob(pygame.sprite.Sprite):
-    def __init__(self, type, starting_pos=None):
+    def __init__(self, type, starting_pos=None, movestyle="random"):
         super(Blob, self).__init__()
         self.type = type
         # self.player = (type == "player")
@@ -81,45 +81,29 @@ class Blob(pygame.sprite.Sprite):
         self.vision_range = VISION_RANGE
         self.angle = 180
 
-        # if self.player:
-        #     self.surf = pygame.Surface((75, 25))
-        #     self.surf.fill((52, 171, 235))
-        #     self.rect = self.surf.get_rect()
-
+        # Deciding icon of blob
         if self.hunter:
             self.orig_image = self.image = img_blob_red_scaled
             self.speed = HUNTER_SPEED
-            # self.surf = pygame.Surface((20, 10))
-            # self.surf.fill((227, 50, 197))
-
         elif self.runner:
             self.orig_image = self.image = img_blob_green_scaled
             self.speed = RUNNER_SPEED
-            # self.surf = pygame.Surface((20, 10))
-            # self.surf.fill((80, 196, 33))
-
         else:
             self.orig_image = self.image = img_blob_grey_scaled
-            # self.surf = pygame.Surface((20, 10))
-            # self.surf.fill((154, 161, 151))
 
         self.rect = self.orig_image.get_rect()
 
+        # Deciding starting position
         if starting_pos:
             self.rect = self.rect.move((starting_pos[0], starting_pos[1]))
-            # self.rect = self.surf.get_rect(
-            #     center=(starting_pos[0], starting_pos[1])
-            # )
         else:
             self.rect = self.rect.move(
                 (random.randint(0, SCREEN_WIDTH),
                  random.randint(0, SCREEN_HEIGHT))
             )
-            # self.rect = self.surf.get_rect(
-            #     center=(random.randint(-2, SCREEN_WIDTH),
-            #             random.randint(-2, SCREEN_HEIGHT))
-            # )
 
+        # Deciding move style
+        self.movestyle = movestyle
 
     # Function to check what is in front
     def see(self, angle_min, angle_max, distance):
@@ -155,10 +139,8 @@ class Blob(pygame.sprite.Sprite):
 
 
         # Note min point is the corner of the right, triangle, max point is corner of the left
-        # Vision cone - left
+        # Vision cones
         left_cone_points = [points[i] for i in [0,1,3]]
-
-        # Vision cone - right
         right_cone_points = [points[i] for i in [0,1,2]]
 
         if DISPLAY_VISION_CONES:
@@ -226,9 +208,6 @@ class Blob(pygame.sprite.Sprite):
 
         return {"hits_left": hits_left, "hits_right": hits_right}
 
-
-    # def hunt(self):
-
     def move(self, x, y):
 
         self.rect = self.rect.move(x, y)
@@ -253,18 +232,20 @@ class Blob(pygame.sprite.Sprite):
 
         speed_change = 1
 
-        # print(targets)
-
         if self.runner:
-            direction = random.randint(-15, 15) * speed_change
+            if self.movestyle == "random":
+                direction = random.randint(-15, 15) * speed_change
 
         elif self.hunter:
-            if targets["hits_left"] + targets["hits_right"] == 0:
-                direction = random.randint(0,3) * speed_change * 10
-            elif (targets["hits_left"] > targets["hits_right"]):
-                direction = -speed_change
-            else:
-                direction = speed_change
+            if self.movestyle == "random":
+                direction = random.randint(-15, 15) * speed_change
+            elif self.movestyle == "simple":
+                if targets["hits_left"] + targets["hits_right"] == 0:
+                    direction = random.randint(0,3) * speed_change * 10
+                elif (targets["hits_left"] > targets["hits_right"]):
+                    direction = -speed_change
+                else:
+                    direction = speed_change
 
         return direction
 
@@ -297,7 +278,7 @@ class Blob(pygame.sprite.Sprite):
         self.move(x, y)
 
     def replicate(self):
-        new_blob = Blob(type=self.type, starting_pos=[self.rect.centerx, self.rect.centery])
+        new_blob = Blob(type=self.type, starting_pos=[self.rect.centerx, self.rect.centery], movestyle=self.movestyle)
 
         if self.hunter:
             if len(hunters) < MAX_HUNTERS:
@@ -312,10 +293,28 @@ class Blob(pygame.sprite.Sprite):
                 all_sprites.add(new_blob)
                 npcs.add(new_blob)
 
-        print("Blob {} replicated, creating blob {}".format(self.id, new_blob.id))
+        # print("Blob {} replicated, creating blob {}".format(self.id, new_blob.id))
 
 
 # player = Blob(type = "player")
+
+def count_types(input_list):
+    hunter_dict = {
+        "random": 0,
+        "simple": 0
+    }
+
+    runner_dict = {
+        "random": 0
+    }
+
+    for i in input_list:
+        if i.runner:
+            runner_dict[i.movestyle] += 1
+        elif i.hunter:
+            hunter_dict[i.movestyle] += 1
+
+    return({"hunter_dict": hunter_dict, "runner_dict": runner_dict})
 
 npcs = pygame.sprite.Group()
 hunters = pygame.sprite.Group()
@@ -328,15 +327,18 @@ clock = pygame.time.Clock()
 
 time_elapsed = 0
 
+
 for i in range(0, STARTCOUNT_HUNTER):
-    new_hunter = Blob(type="hunter")
+    new_hunter = Blob(type="hunter", movestyle="random")
     hunters.add(new_hunter)
     all_sprites.add(new_hunter)
 
 for i in range(0, STARTCOUNT_RUNNER):
-    new_runner= Blob(type="runner")
+    new_runner= Blob(type="runner", movestyle="random")
     runners.add(new_runner)
     all_sprites.add(new_runner)
+
+print("Starting program...")
 
 while running:
 
@@ -361,12 +363,12 @@ while running:
             all_sprites.add(new_npc)
 
         elif event.type == ADDHUNTER and len(hunters) < MAX_HUNTERS:
-            new_hunter = Blob(type="hunter")
+            new_hunter = Blob(type="hunter", movestyle="simple")
             hunters.add(new_hunter)
             all_sprites.add(new_hunter)
 
         elif event.type == ADDRUNNER and len(runners) < MAX_RUNNERS:
-            new_runner = Blob(type="runner")
+            new_runner = Blob(type="runner", movestyle="random")
             runners.add(new_runner)
             all_sprites.add(new_runner)
         else:
@@ -384,18 +386,18 @@ while running:
         for h, rs in collision_dict.items():
             h.killcount += len(rs)
 
-            print("Hunter {} ate runner(s) ".format(str(h.id)) + ", ".join([str(r.id) for r in rs]) + ". Total kills: {}".format(str(h.killcount)))
+            # print("Hunter {} ate runner(s) ".format(str(h.id)) + ", ".join([str(r.id) for r in rs]) + ". Total kills: {}".format(str(h.killcount)))
             h.replicate()
             h.nokillage = 0
 
         for r in runners:
             if r.age >= RUNNER_SPLIT_AGE:
-                print("Runner {} survived for {} ticks and replicated".format(str(r.id), str(RUNNER_SPLIT_AGE)))
+                # print("Runner {} survived for {} ticks and replicated".format(str(r.id), str(RUNNER_SPLIT_AGE)))
                 r.replicate()
 
         for h in hunters:
             if h.nokillage >= HUNTER_NOKILL_DIE_AGE:
-                print("Hunter {} didn't get a kill for {} ticks and died".format(str(h.nokillage), str(HUNTER_NOKILL_DIE_AGE)))
+                # print("Hunter {} didn't get a kill for {} ticks and died".format(str(h.id), str(HUNTER_NOKILL_DIE_AGE)))
                 h.kill()
 
         for b in all_sprites:
@@ -411,6 +413,8 @@ while running:
             screen.blit(entity.image, entity.rect)
 
         pygame.display.flip()
+
+    print("\r" + "Hunters: " + str(count_types(all_sprites)["hunter_dict"]) + "  | Runners: " + str(count_types(all_sprites)["runner_dict"]), end="")
 
 pygame.quit()
 
